@@ -76,6 +76,7 @@ contract('StakeWallet', function ([owner, user, tradePartner]) {
   });
 
   it("should allow the owner to retrieve the stake after a positive review", async function () {
+    const response = await this.stakeWallet.reclaimStake(tradePartner, { from: user });
 
   });
 
