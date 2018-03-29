@@ -118,6 +118,42 @@ contract('StakeWallet', function ([owner, user, tradePartner]) {
   });
 
   it("should allow the owner to retrieve the stake after the expiration date if no review was left", async function () {
+    const userBalanceBefore = web3.eth.getBalance(user);
+
+    // user creates a grant
+    const expirationDate = latestTime() + duration.weeks(1);
+    const partOfJointGrant = false;
+    const stakedValue = ether(1);
+    const grantResponse = await this.stakeWallet.grant(tradePartner, expirationDate, partOfJointGrant, { from: user, value: stakedValue });
+    const grantResponseTx = await web3.eth.getTransaction(grantResponse.tx);
+    const grantCost = grantResponseTx.gasPrice.mul(grantResponse.receipt.gasUsed);
+
+    const partnerBalanceBefore = web3.eth.getBalance(tradePartner);
+
+    // time passes and it expires with no review left
+    await increaseTimeTo(expirationDate + 1);
+
+    // attempt to reclaim stake after grant expired
+    const reclaimStakeResponse = await this.stakeWallet.reclaimStake(tradePartner, { from: user });
+    const reclaimStakeTx = await web3.eth.getTransaction(reclaimStakeResponse.tx);
+    const reclaimStakeCost = reclaimStakeTx.gasPrice.mul(reclaimStakeResponse.receipt.gasUsed);
+
+    const partnerBalanceAfter = web3.eth.getBalance(tradePartner);
+
+    // check that the staked value was returned.
+    const stakeReclaimed = reclaimStakeResponse.logs[0];
+    assert.equal(stakeReclaimed.event, "StakeReclaimed");
+    assert.equal(stakeReclaimed.args.user, user);
+    assert.equal(stakeReclaimed.args.partner, tradePartner);
+
+    const userBalanceAfter = web3.eth.getBalance(user);
+    const expectedUserBalanceAfter = userBalanceBefore.sub(grantCost).sub(reclaimStakeCost);
+    userBalanceAfter.should.be.bignumber.equal(expectedUserBalanceAfter);
+
+    partnerBalanceBefore.should.be.bignumber.equal(partnerBalanceAfter);
+  });
+
+  it("should not allow the user to retrieve the stake before the expiration date if no review is left", async function () {
 
   });
 
