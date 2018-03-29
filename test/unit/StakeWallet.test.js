@@ -154,10 +154,30 @@ contract('StakeWallet', function ([owner, user, tradePartner]) {
   });
 
   it("should not allow the user to retrieve the stake before the expiration date if no review is left", async function () {
+    // user creates a grant
+    const expirationDate = latestTime() + duration.weeks(1);
+    const partOfJointGrant = false;
+    const stakedValue = ether(1);
+    await this.stakeWallet.grant(tradePartner, expirationDate, partOfJointGrant, { from: user, value: stakedValue });
 
+    // attempt to reclaim stake before a review is left and before the grant expired
+    expectThrow(this.stakeWallet.reclaimStake(tradePartner, { from: user }));
   });
 
   it("should not allow a user to retrieve the stake after a negative review", async function () {
+    // user creates a grant
+    const expirationDate = latestTime() + duration.weeks(1);
+    const partOfJointGrant = false;
+    const stakedValue = ether(1);
+    await this.stakeWallet.grant(tradePartner, expirationDate, partOfJointGrant, { from: user, value: stakedValue });
+
+    // tradePartner positively reviews.
+    const negativeExperience = true;
+    const comment = "some bad review";
+    await this.stakeWallet.review(user, negativeExperience, comment, { from: tradePartner });
+
+    // try to reclaim after a negative review.
+    expectThrow(this.stakeWallet.reclaimStake(tradePartner, { from: user }));
 
   });
 
