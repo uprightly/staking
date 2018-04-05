@@ -13,10 +13,15 @@ require('chai')
   .use(require('chai-bignumber')(BigNumber))
   .should();
 
+async function getCost(response) {
+  const responseTx = await web3.eth.getTransaction(response.tx);
+  return responseTx.gasPrice.mul(response.receipt.gasUsed);
+}
+
 /**
  * Unit tests for the stake wallet
  */
-contract('StakeWallet', function ([owner, user, tradePartner]) {
+contract('StakeWallet', function ([owner, user, tradePartner, randomUser]) {
 
   beforeEach(async function () {
     this.stakeWallet = await StakeWallet.new();
@@ -75,7 +80,7 @@ contract('StakeWallet', function ([owner, user, tradePartner]) {
 
   });
 
-  it("should allow the owner to retrieve the stake after a positive review", async function () {
+  it("should allow the user to retrieve the stake after a positive review", async function () {
     const userBalanceBefore = web3.eth.getBalance(user);
 
     // user creates a grant
@@ -83,8 +88,7 @@ contract('StakeWallet', function ([owner, user, tradePartner]) {
     const partOfJointGrant = false;
     const stakedValue = ether(1);
     const grantResponse = await this.stakeWallet.grant(tradePartner, expirationDate, partOfJointGrant, { from: user, value: stakedValue });
-    const grantResponseTx = await web3.eth.getTransaction(grantResponse.tx);
-    const grantCost = grantResponseTx.gasPrice.mul(grantResponse.receipt.gasUsed);
+    const grantCost = await getCost(grantResponse);
 
     // tradePartner positively reviews.
     const negativeExperience = false;
@@ -98,8 +102,7 @@ contract('StakeWallet', function ([owner, user, tradePartner]) {
     // in order to do that, we'd have to loop over all grants for this user
     // to discover if any are expired.
     const reclaimStakeResponse = await this.stakeWallet.reclaimStake(tradePartner, { from: user });
-    const reclaimStakeTx = await web3.eth.getTransaction(reclaimStakeResponse.tx);
-    const reclaimStakeCost = reclaimStakeTx.gasPrice.mul(reclaimStakeResponse.receipt.gasUsed);
+    const reclaimStakeCost = await getCost(reclaimStakeResponse);
 
     const partnerBalanceAfter = web3.eth.getBalance(tradePartner);
 
@@ -117,7 +120,7 @@ contract('StakeWallet', function ([owner, user, tradePartner]) {
 
   });
 
-  it("should allow the owner to retrieve the stake after the expiration date if no review was left", async function () {
+  it("should allow the user to retrieve the stake after the expiration date if no review was left", async function () {
     const userBalanceBefore = web3.eth.getBalance(user);
 
     // user creates a grant
@@ -125,8 +128,7 @@ contract('StakeWallet', function ([owner, user, tradePartner]) {
     const partOfJointGrant = false;
     const stakedValue = ether(1);
     const grantResponse = await this.stakeWallet.grant(tradePartner, expirationDate, partOfJointGrant, { from: user, value: stakedValue });
-    const grantResponseTx = await web3.eth.getTransaction(grantResponse.tx);
-    const grantCost = grantResponseTx.gasPrice.mul(grantResponse.receipt.gasUsed);
+    const grantCost = await getCost(grantResponse);
 
     const partnerBalanceBefore = web3.eth.getBalance(tradePartner);
 
@@ -135,8 +137,7 @@ contract('StakeWallet', function ([owner, user, tradePartner]) {
 
     // attempt to reclaim stake after grant expired
     const reclaimStakeResponse = await this.stakeWallet.reclaimStake(tradePartner, { from: user });
-    const reclaimStakeTx = await web3.eth.getTransaction(reclaimStakeResponse.tx);
-    const reclaimStakeCost = reclaimStakeTx.gasPrice.mul(reclaimStakeResponse.receipt.gasUsed);
+    const reclaimStakeCost = await getCost(reclaimStakeResponse);
 
     const partnerBalanceAfter = web3.eth.getBalance(tradePartner);
 
@@ -171,7 +172,7 @@ contract('StakeWallet', function ([owner, user, tradePartner]) {
     const stakedValue = ether(1);
     await this.stakeWallet.grant(tradePartner, expirationDate, partOfJointGrant, { from: user, value: stakedValue });
 
-    // tradePartner positively reviews.
+    // tradePartner negatively reviews.
     const negativeExperience = true;
     const comment = "some bad review";
     await this.stakeWallet.review(user, negativeExperience, comment, { from: tradePartner });
@@ -182,6 +183,48 @@ contract('StakeWallet', function ([owner, user, tradePartner]) {
   });
 
   it("should allow the Uprightly team to retrieve lost stakes from negative reviews", async function () {
+    // user creates a grant
+    const expirationDate = latestTime() + duration.weeks(1);
+    const partOfJointGrant = false;
+    const stakedValue = ether(1);
+    await this.stakeWallet.grant(tradePartner, expirationDate, partOfJointGrant, { from: user, value: stakedValue });
+
+    // tradePartner negatively reviews.
+    const negativeExperience = true;
+    const comment = "some bad review";
+    await this.stakeWallet.review(user, negativeExperience, comment, { from: tradePartner });
+
+    // check the value of claims that were negative
+    const amountForClaiming = await this.stakeWallet.lostStakes();
+    amountForClaiming.should.be.bignumber.equal(stakedValue);
+
+    // owner (uprightly team) can claim the stake
+    const ownerBalanceBefore = web3.eth.getBalance(owner);
+    const response = await this.stakeWallet.claimLostStakes({ from: owner });
+    const claimLostStakesCost = await getCost(response);
+    const ownerBalanceAfter = web3.eth.getBalance(owner);
+    ownerBalanceAfter.should.be.bignumber.equal(ownerBalanceBefore.add(amountForClaiming).sub(claimLostStakesCost));
+
+  });
+
+  it("should not allow anyone but the owner to retrieve lost stakes from negative reviews", async function () {
+    // user creates a grant
+    const expirationDate = latestTime() + duration.weeks(1);
+    const partOfJointGrant = false;
+    const stakedValue = ether(1);
+    await this.stakeWallet.grant(tradePartner, expirationDate, partOfJointGrant, { from: user, value: stakedValue });
+
+    // tradePartner negatively reviews.
+    const negativeExperience = true;
+    const comment = "some bad review";
+    await this.stakeWallet.review(user, negativeExperience, comment, { from: tradePartner });
+
+    // check the value of claims that were negative
+    const amountForClaiming = await this.stakeWallet.lostStakes();
+    amountForClaiming.should.be.bignumber.equal(stakedValue);
+
+    // random person cannot claim the stake
+    expectThrow(this.stakeWallet.claimLostStakes({ from: randomUser }));
 
   });
 

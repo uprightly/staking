@@ -1,12 +1,16 @@
 pragma solidity ^0.4.18;
 
+import "../node_modules/zeppelin-solidity/contracts/ownership/Claimable.sol";
+
 /**
  */
-contract StakeWallet {
+contract StakeWallet is Claimable {
     event GrantCreated(address indexed user, address indexed partner, uint256 stakedValue, uint256 expirationDate, bool partOfJointGrant);
     event ReviewCreated(address indexed user, address indexed reviewer, bool negativeExperience, string comment);
-    event GrantClosed(address user, address partner);
-    event StakeReclaimed(address user, address partner);
+    event GrantClosed(address indexed user, address indexed partner);
+    event StakeReclaimed(address indexed user, address indexed partner);
+    event StakeLost(address indexed user, uint value);
+    event LostStakesClaimed(uint value);
 
     struct Grant {
         bool exists;
@@ -21,6 +25,8 @@ contract StakeWallet {
     }
 
     mapping (address => mapping (address => Grant)) grants;
+
+    uint256 public lostStakes;
 
     function grant(address partner, uint256 expirationDate, bool partOfJointGrant) payable public returns (bool) {
         require(partner != msg.sender);
@@ -46,7 +52,7 @@ contract StakeWallet {
         return true;
     }
 
-    function review(address partner, bool negativeExperience, string comments) payable public returns (bool) {
+    function review(address partner, bool negativeExperience, string comments) public returns (bool) {
         require(grants[msg.sender][partner].exists == true);
         require(grants[msg.sender][partner].reviewed == false);
         require(grants[msg.sender][partner].expirationDate > now);
@@ -54,6 +60,13 @@ contract StakeWallet {
         // Mark the Grant for this partner for this user reviewed and note the review
         grants[msg.sender][partner].reviewed = true;
         grants[msg.sender][partner].negativeExperience = negativeExperience;
+
+        if (negativeExperience) {
+            // the stake has been claimed by the contract and added to lostStakes
+            lostStakes += grants[msg.sender][partner].stakedValue;
+            grants[partner][msg.sender].stakeReclaimed = true;
+            StakeLost(partner, grants[msg.sender][partner].stakedValue);
+        }
 
         ReviewCreated(partner, msg.sender, negativeExperience, comments);
         GrantClosed(partner, msg.sender);
@@ -81,6 +94,14 @@ contract StakeWallet {
 
         msg.sender.transfer(grants[partner][msg.sender].stakedValue);
 
+        return true;
+    }
+
+    function claimLostStakes() public onlyOwner returns (bool) {
+        uint256 stakesToSend = lostStakes;
+        lostStakes = 0;
+        LostStakesClaimed(stakesToSend);
+        msg.sender.transfer(stakesToSend);
         return true;
     }
 
