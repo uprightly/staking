@@ -29,13 +29,18 @@ contract('StakeWallet', function ([owner, user, tradePartner, randomUser]) {
   });
 
   it("should allow a user to submit a grant and a stake amount", async function () {
+    const balanceBefore = web3.eth.getBalance(user);
+
     const expirationDate = latestTime() + duration.weeks(1);
     const partOfJointGrant = false;
     const stakedValue = ether(1);
 
     const response = await this.stakeWallet.grant(tradePartner, expirationDate, partOfJointGrant, { from: user, value: stakedValue });
+    const cost = getCost(response);
 
     const grantEvent = response.logs[0];
+
+    const balanceAfter = web3.eth.getBalance(user);
 
     assert.equal(grantEvent.event, "GrantCreated");
     assert.equal(grantEvent.args.user, user);
@@ -43,6 +48,8 @@ contract('StakeWallet', function ([owner, user, tradePartner, randomUser]) {
     assert.equal(grantEvent.args.expirationDate, expirationDate);
     assert.equal(grantEvent.args.partOfJointGrant, partOfJointGrant);
     grantEvent.args.stakedValue.should.be.bignumber.equal(stakedValue);
+
+    balanceAfter.should.be.bignumber.equal(balanceBefore.sub(cost).sub(stakedValue));
   });
 
   it("should allow a user leave a review for a user that granted them a review", async function () {
@@ -227,22 +234,5 @@ contract('StakeWallet', function ([owner, user, tradePartner, randomUser]) {
     expectThrow(this.stakeWallet.claimLostStakes({ from: randomUser }));
 
   });
-
-  it("should allow for a way to do joint grants between two users", async function () {
-
-  });
-
-  it("should allow users to leave reviews for each other in a joint grant", async function () {
-
-  });
-
-  it("should allow both users to retrieve stakes after atleast one positive review was left during a joint grant", async function () {
-
-  });
-
-  it("should not allow users to retrieve stakes if both left a negative review in a joint grant", async function () {
-
-  });
-
 
 });
