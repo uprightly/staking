@@ -1,4 +1,4 @@
-pragma solidity ^0.4.18;
+pragma solidity ^0.4.23;
 
 import "../node_modules/zeppelin-solidity/contracts/ownership/Claimable.sol";
 
@@ -36,6 +36,7 @@ contract StakeWallet is Claimable {
         // TODO: make multiple grants not overwrite existing grants. This is a big issue.
         // for now, just make sure there is not a pre-existing grant.
         require(grants[partner][msg.sender].exists == false);
+
         grants[partner][msg.sender] = Grant({
             exists: true,
             reviewed: false,
@@ -48,7 +49,7 @@ contract StakeWallet is Claimable {
             partOfJointGrant: partOfJointGrant
         });
 
-        GrantCreated(msg.sender, partner, msg.value, expirationDate, partOfJointGrant);
+        emit GrantCreated(msg.sender, partner, msg.value, expirationDate, partOfJointGrant);
         return true;
     }
 
@@ -65,11 +66,11 @@ contract StakeWallet is Claimable {
             // the stake has been claimed by the contract and added to lostStakes
             lostStakes += grants[msg.sender][partner].stakedValue;
             grants[partner][msg.sender].stakeReclaimed = true;
-            StakeLost(partner, grants[msg.sender][partner].stakedValue);
+            emit StakeLost(partner, grants[msg.sender][partner].stakedValue);
         }
 
-        ReviewCreated(partner, msg.sender, negativeExperience, comments);
-        GrantClosed(partner, msg.sender);
+        emit ReviewCreated(partner, msg.sender, negativeExperience, comments);
+        emit GrantClosed(partner, msg.sender);
 
         return true;
     }
@@ -90,7 +91,7 @@ contract StakeWallet is Claimable {
         // This ends the grant, clear it out. Unsure at this point if we still need the grant for the dual-grant feature
         // so just use a boolean to flag this as reclaimed already.
         grants[partner][msg.sender].stakeReclaimed = true;
-        StakeReclaimed(msg.sender, partner);
+        emit StakeReclaimed(msg.sender, partner);
 
         msg.sender.transfer(grants[partner][msg.sender].stakedValue);
 
@@ -100,7 +101,7 @@ contract StakeWallet is Claimable {
     function claimLostStakes() public onlyOwner returns (bool) {
         uint256 stakesToSend = lostStakes;
         lostStakes = 0;
-        LostStakesClaimed(stakesToSend);
+        emit LostStakesClaimed(stakesToSend);
         msg.sender.transfer(stakesToSend);
         return true;
     }

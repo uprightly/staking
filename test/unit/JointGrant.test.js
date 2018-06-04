@@ -19,7 +19,7 @@ async function getCost(response) {
 }
 
 /**
- * Unit tests for the stake wallet
+ * Unit tests for a joint grant
  */
 contract('JointGrant', function ([owner, user, tradePartner, randomUser]) {
 
