@@ -36,7 +36,7 @@ contract('StakeWallet', function ([owner, user, tradePartner, randomUser]) {
     const stakedValue = ether(1);
 
     const response = await this.stakeWallet.grant(tradePartner, expirationDate, partOfJointGrant, { from: user, value: stakedValue });
-    const cost = getCost(response);
+    const cost = await getCost(response);
 
     const grantEvent = response.logs[0];
 
