@@ -33,11 +33,10 @@ contract('JointGrant', function ([owner, user, tradePartner, randomUser]) {
     const tradePartnerBalanceBefore = web3.eth.getBalance(tradePartner);
 
     const expirationDate = latestTime() + duration.weeks(1);
-    const partOfJointGrant = true;
 
     // user creates a grant
     const stakedValue = ether(1);
-    const response = await this.jointGrant.jointGrant(tradePartner, expirationDate, partOfJointGrant, { from: user, value: stakedValue });
+    const response = await this.jointGrant.attempt(tradePartner, expirationDate, { from: user, value: stakedValue });
     const userCost = getCost(response);
     const grantEvent = response.logs[0];
 
@@ -45,12 +44,11 @@ contract('JointGrant', function ([owner, user, tradePartner, randomUser]) {
     assert.equal(grantEvent.args.user, user);
     assert.equal(grantEvent.args.partner, tradePartner);
     assert.equal(grantEvent.args.expirationDate, expirationDate);
-    assert.equal(grantEvent.args.partOfJointGrant, partOfJointGrant);
     grantEvent.args.stakedValue.should.be.bignumber.equal(stakedValue);
 
     // tradePartner creates a grant
     const secondStakedValue = ether(2);
-    const secondResponse = await this.jointGrant.jointGrant(user, expirationDate, partOfJointGrant, { from: tradePartner, value: secondStakedValue });
+    const secondResponse = await this.jointGrant.attempt(user, expirationDate, { from: tradePartner, value: secondStakedValue });
     const tradePartnerCost = getCost(secondResponse);
     const secondGrantEvent = secondResponse.logs[0];
 
@@ -58,7 +56,6 @@ contract('JointGrant', function ([owner, user, tradePartner, randomUser]) {
     assert.equal(secondGrantEvent.args.user, tradePartner);
     assert.equal(secondGrantEvent.args.partner, user);
     assert.equal(secondGrantEvent.args.expirationDate, expirationDate);
-    assert.equal(secondGrantEvent.args.partOfJointGrant, partOfJointGrant);
     secondGrantEvent.args.stakedValue.should.be.bignumber.equal(secondStakedValue);
 
     const userBalanceAfter = web3.eth.getBalance(user);
@@ -68,13 +65,50 @@ contract('JointGrant', function ([owner, user, tradePartner, randomUser]) {
     tradePartnerBalanceAfter.should.be.bignumber.equal(tradePartnerBalanceBefore.sub(tradePartnerCost).sub(secondStakedValue));
   });
 
-  it("should fail to create joint grant if expiration date does not match", async function () {
+  it("should not allow a user to attempt a grant with the same tradePartner without canceling first", async function () {
+    const userBalanceBefore = web3.eth.getBalance(user);
+    const tradePartnerBalanceBefore = web3.eth.getBalance(tradePartner);
+
     const expirationDate = latestTime() + duration.weeks(1);
-    const partOfJointGrant = true;
 
     // user creates a grant
     const stakedValue = ether(1);
-    const response = await this.jointGrant.jointGrant(tradePartner, expirationDate, partOfJointGrant, { from: user, value: stakedValue });
+    await this.jointGrant.attempt(tradePartner, expirationDate, { from: user, value: stakedValue });
+    expectThrow(this.jointGrant.attempt(tradePartner, expirationDate, { from: user, value: stakedValue }));
+  });
+
+  it("should not allow either user to attempt a grant with the same tradePartner while there is an active grant", async function () {
+    const userBalanceBefore = web3.eth.getBalance(user);
+    const tradePartnerBalanceBefore = web3.eth.getBalance(tradePartner);
+
+    const expirationDate = latestTime() + duration.weeks(1);
+
+    // user creates a grant
+    const stakedValue = ether(1);
+    const response = await this.jointGrant.attempt(tradePartner, expirationDate, { from: user, value: stakedValue });
+    const userCost = getCost(response);
+    const grantEvent = response.logs[0];
+
+    assert.equal(grantEvent.event, "jointGrantAttempted");
+
+    // tradePartner creates a grant
+    const secondStakedValue = ether(2);
+    const secondResponse = await this.jointGrant.attempt(user, expirationDate, { from: tradePartner, value: secondStakedValue });
+    const tradePartnerCost = getCost(secondResponse);
+    const secondGrantEvent = secondResponse.logs[0];
+
+    assert.equal(secondGrantEvent.event, "jointGrantCreated");
+
+    expectThrow(this.jointGrant.attempt(tradePartner, expirationDate, { from: user, value: stakedValue }));
+    expectThrow(this.jointGrant.attempt(user, expirationDate, { from: tradePartner, value: secondStakedValue }));
+  });
+
+  it("should fail to create joint grant if expiration date does not match", async function () {
+    const expirationDate = latestTime() + duration.weeks(1);
+
+    // user creates a grant
+    const stakedValue = ether(1);
+    const response = await this.jointGrant.attempt(tradePartner, expirationDate, { from: user, value: stakedValue });
     const grantEvent = response.logs[0];
 
     assert.equal(grantEvent.event, "jointGrantAttempted");
@@ -82,180 +116,255 @@ contract('JointGrant', function ([owner, user, tradePartner, randomUser]) {
     // tradePartner creates a grant
     const wrongExpirationDate = latestTime() + duration.weeks(2);
     const secondStakedValue = ether(2);
-    expectThrow(this.jointGrant.jointGrant(user, wrongExpirationDate, partOfJointGrant, { from: tradePartner, value: secondStakedValue }));
+    expectThrow(this.jointGrant.attempt(user, wrongExpirationDate, { from: tradePartner, value: secondStakedValue }));
 
   });
 
   it("should allow user to cancel and reclaim stake for an attempted joint grant that has not been created yet", async function () {
     const balanceBefore = web3.eth.getBalance(user);
     const expirationDate = latestTime() + duration.weeks(1);
-    const partOfJointGrant = true;
 
     // user creates a grant
     const stakedValue = ether(1);
-    const response = await this.jointGrant.jointGrant(tradePartner, expirationDate, { from: user, value: stakedValue });
+    const response = await this.jointGrant.attempt(tradePartner, expirationDate, { from: user, value: stakedValue });
     responseCost = getCost(response);
     const grantEvent = response.logs[0];
 
     assert.equal(grantEvent.event, "jointGrantAttempted");
 
-    const recallResponse = await this.recallJointGrant(tradePartner, { from: user });
-    const recallCost = getCost(recallResponse);
-    const recallEvent = response.logs[0];
+    const cancelResponse = await this.jointGrant.cancel(tradePartner, { from: user });
+    const cancelCost = getCost(cancelResponse);
+    const cancelEvent = response.logs[0];
 
-    assert.equal(recallEvent.event, "jointGrantRecalled");
-    assert.equal(recallEvent.args.user, user);
-    assert.equal(recallEvent.args.partner, tradePartner);
+    assert.equal(cancelEvent.event, "jointGrantCanceled");
+    assert.equal(cancelEvent.args.user, user);
+    assert.equal(cancelEvent.args.partner, tradePartner);
 
     const balanceAfter = web3.eth.getBalance(user);
 
-    balanceAfter.should.be.bignumber.equal(balanceBefore.sub(responseCost).sub(recallCost));
+    balanceAfter.should.be.bignumber.equal(balanceBefore.sub(responseCost).sub(cancelCost));
 
   });
 
   it("should fail to create a joint grant if a user attempts and then cancels before the other party attempts", async function () {
     const expirationDate = latestTime() + duration.weeks(1);
-    const partOfJointGrant = true;
 
     // user creates a grant
     const stakedValue = ether(1);
-    await this.jointGrant.grant(tradePartner, expirationDate, partOfJointGrant, { from: user, value: stakedValue });
-    await this.recallJointGrant(tradePartner, { from: user });
+    await this.jointGrant.grant(tradePartner, expirationDate, { from: user, value: stakedValue });
+    await this.jointGrant.cancel(tradePartner, { from: user });
 
     // tradePartner creates a grant
     const secondStakedValue = ether(2);
-    const response = await this.jointGrant.jointGrant(user, expirationDate, partOfJointGrant, { from: tradePartner, value: secondStakedValue });
+    const response = await this.jointGrant.attempt(user, expirationDate, { from: tradePartner, value: secondStakedValue });
 
     const grantEvent = response.logs[0];
 
-    // this indicates that the recalled grant attempt is no longer valid, otherwise this would have created a joint grant.
+    // this indicates that the canceled grant attempt is no longer valid, otherwise this would have created a joint grant.
     assert.equal(grantEvent.event, "jointGrantAttempted");
   });
 
   it("should allow users to leave reviews for each other in a joint grant", async function () {
     const expirationDate = latestTime() + duration.weeks(1);
-    const partOfJointGrant = true;
 
     // user creates a grant
     const stakedValue = ether(1);
-    await this.jointGrant.jointGrant(tradePartner, expirationDate, partOfJointGrant, { from: user, value: stakedValue });
+    await this.jointGrant.attempt(tradePartner, expirationDate, { from: user, value: stakedValue });
 
     // tradePartner creates a grant
     const secondStakedValue = ether(2);
-    await this.jointGrant.jointGrant(user, expirationDate, partOfJointGrant, { from: tradePartner, value: secondStakedValue });
+    await this.jointGrant.attempt(user, expirationDate, { from: tradePartner, value: secondStakedValue });
 
-    // todo
+    // user tries to review
+    const negativeExperience = false;
+    const comments = "had a great time.";
+    const reviewResponse = await this.jointGrant.review(tradePartner, negativeExperience, comments, { from: user });
+
+    const reviewCreatedEvent = reviewResponse.logs[0];
+
+    assert.equal(reviewCreatedEvent.event, "reviewCreated");
+    assert.equal(reviewCreatedEvent.args.reviewer, user);
+    assert.equal(reviewCreatedEvent.args.reviewee, tradePartner);
+
+    // tradePartner tries to review
+    const negativeExperience2 = true;
+    const comments2 = "had a bad time.";
+    const reviewResponse2 = await this.jointGrant.review(user, negativeExperience2, comments2, { from: tradePartner });
+
+    const reviewCreatedEvent2 = reviewResponse2.logs[0];
+
+    assert.equal(reviewCreatedEvent2.event, "reviewCreated");
+    assert.equal(reviewCreatedEvent2.args.reviewer, tradePartner);
+    assert.equal(reviewCreatedEvent2.args.reviewee, user);
+
   });
 
-  it("should keep reviews secret until both have submitted a review", async function () {
+  it("should fail to allow users to leave reviews for each other if the grant has not been created", async function () {
     const expirationDate = latestTime() + duration.weeks(1);
-    const partOfJointGrant = true;
 
     // user creates a grant
     const stakedValue = ether(1);
-    await this.jointGrant.jointGrant(tradePartner, expirationDate, partOfJointGrant, { from: user, value: stakedValue });
+    await this.jointGrant.attempt(tradePartner, expirationDate, { from: user, value: stakedValue });
 
-    // tradePartner creates a grant
-    const secondStakedValue = ether(2);
-    await this.jointGrant.jointGrant(user, expirationDate, partOfJointGrant, { from: tradePartner, value: secondStakedValue });
-
-    // todo
+    // user tries to review
+    const negativeExperience = false;
+    const comments = "this is a review that was left before the grant was created by both parties.";
+    expectThrow(this.jointGrant.review(tradePartner, negativeExperience, comments, { from: user }));
 
   });
 
   it("should reveal reviews after both are submitted", async function () {
     const expirationDate = latestTime() + duration.weeks(1);
-    const partOfJointGrant = true;
 
     // user creates a grant
     const stakedValue = ether(1);
-    await this.jointGrant.jointGrant(tradePartner, expirationDate, partOfJointGrant, { from: user, value: stakedValue });
+    await this.jointGrant.attempt(tradePartner, expirationDate, { from: user, value: stakedValue });
 
     // tradePartner creates a grant
     const secondStakedValue = ether(2);
-    await this.jointGrant.jointGrant(user, expirationDate, partOfJointGrant, { from: tradePartner, value: secondStakedValue });
+    await this.jointGrant.attempt(user, expirationDate, { from: tradePartner, value: secondStakedValue });
 
-    // todo
+    // todo. should there be a reveal process or can it be done with hashing somehow?
 
   });
 
   it("should allow users to reclaim stakes as long as one review is positive", async function () {
     const expirationDate = latestTime() + duration.weeks(1);
-    const partOfJointGrant = true;
 
     // user creates a grant
     const stakedValue = ether(1);
-    await this.jointGrant.jointGrant(tradePartner, expirationDate, partOfJointGrant, { from: user, value: stakedValue });
+    await this.jointGrant.attempt(tradePartner, expirationDate, { from: user, value: stakedValue });
 
     // tradePartner creates a grant
     const secondStakedValue = ether(2);
-    await this.jointGrant.jointGrant(user, expirationDate, partOfJointGrant, { from: tradePartner, value: secondStakedValue });
+    await this.jointGrant.attempt(user, expirationDate, { from: tradePartner, value: secondStakedValue });
 
-    // todo
+    // todo. need to figure out reveal process first.
 
   });
 
-  it("should treat an expired review as a positive experience and allow reclaiming of stakes", async function () {
+  it("should treat an expired review as a positive experience if both reviews were not left and allow reclaiming of stakes", async function () {
+    const userBalanceBefore = web3.eth.getBalance(user);
+    const partnerBalanceBefore = web3.eth.getBalance(tradePartner);
+
     const expirationDate = latestTime() + duration.weeks(1);
-    const partOfJointGrant = true;
 
     // user creates a grant
     const stakedValue = ether(1);
-    await this.jointGrant.jointGrant(tradePartner, expirationDate, partOfJointGrant, { from: user, value: stakedValue });
+    const userGrantResponse = await this.jointGrant.attempt(tradePartner, expirationDate, { from: user, value: stakedValue });
+    const userGrantCost = await getCost(userGrantResponse);
 
     // tradePartner creates a grant
     const secondStakedValue = ether(2);
-    await this.jointGrant.jointGrant(user, expirationDate, partOfJointGrant, { from: tradePartner, value: secondStakedValue });
+    const partnerGrantResponse = await this.jointGrant.attempt(user, expirationDate, { from: tradePartner, value: secondStakedValue });
+    const partnerGrantCost = await getCost(partnerGrantResponse);
 
-    // todo
+    // expiration with no reviews
+    await increaseTimeTo(expirationDate + 1);
+
+    // attempt to reclaim stakes after grant expired
+    const userReclaimStakeResponse = await this.jointGrant.reclaimStake(tradePartner, { from: user });
+    const userReclaimStakeCost = await getCost(userReclaimStakeResponse);
+
+    // check that the staked value was returned to user.
+    const userStakeReclaimed = userReclaimStakeResponse.logs[0];
+    assert.equal(userStakeReclaimed.event, "StakeReclaimed");
+    assert.equal(userStakeReclaimed.args.user, user);
+    assert.equal(userStakeReclaimed.args.partner, tradePartner);
+
+    const userBalanceAfter = web3.eth.getBalance(user);
+    const expectedUserBalanceAfter = userBalanceBefore.sub(userGrantCost).sub(userReclaimStakeCost);
+    userBalanceAfter.should.be.bignumber.equal(expectedUserBalanceAfter);
+
+    // attempt to reclaim stakes after grant expired for partner
+    const partnerReclaimStakeResponse = await this.jointGrant.reclaimStake(user, { from: tradePartner });
+    const partnerReclaimStakeCost = await getCost(partnerReclaimStakeResponse);
+
+    // check that the staked value was returned to tradePartner.
+    const partnerStakeReclaimed = partnerReclaimStakeResponse.logs[0];
+    assert.equal(partnerStakeReclaimed.event, "StakeReclaimed");
+    assert.equal(partnerStakeReclaimed.args.user, tradePartner);
+    assert.equal(partnerStakeReclaimed.args.partner, user);
+
+    const partnerBalanceAfter = web3.eth.getBalance(user);
+    const expectedPartnerBalanceAfter = partnerBalanceBefore.sub(partnerGrantCost).sub(partnerReclaimStakeCost);
+    partnerBalanceAfter.should.be.bignumber.equal(expectedPartnerBalanceAfter);
+
+  });
+
+  it("should not allow reclaiming of stakes if both reviews have not been left and it has not expired", async function () {
+    const expirationDate = latestTime() + duration.weeks(1);
+
+    // user creates a grant
+    const stakedValue = ether(1);
+    await this.jointGrant.attempt(tradePartner, expirationDate, { from: user, value: stakedValue });
+
+    // tradePartner creates a grant
+    const secondStakedValue = ether(2);
+    await this.jointGrant.attempt(user, expirationDate, { from: tradePartner, value: secondStakedValue });
+
+    expectThrow(await this.jointGrant.reclaimStake(tradePartner, { from: user }));
+    expectThrow(await this.jointGrant.reclaimStake(user, { from: tradePartner }));
+
+  });
+
+  it("should not allow reclaiming of stakes if only one review has been left and it has not expired", async function () {
+    const expirationDate = latestTime() + duration.weeks(1);
+
+    // user creates a grant
+    const stakedValue = ether(1);
+    await this.jointGrant.attempt(tradePartner, expirationDate, { from: user, value: stakedValue });
+
+    // tradePartner creates a grant
+    const secondStakedValue = ether(2);
+    await this.jointGrant.attempt(user, expirationDate, { from: tradePartner, value: secondStakedValue });
+
+    // todo. need to figure out reveal process.
 
   });
 
   it("should not allow reclaiming of stakes if both reviews are negative", async function () {
     const expirationDate = latestTime() + duration.weeks(1);
-    const partOfJointGrant = true;
 
     // user creates a grant
     const stakedValue = ether(1);
-    await this.jointGrant.jointGrant(tradePartner, expirationDate, partOfJointGrant, { from: user, value: stakedValue });
+    await this.jointGrant.attempt(tradePartner, expirationDate, { from: user, value: stakedValue });
 
     // tradePartner creates a grant
     const secondStakedValue = ether(2);
-    await this.jointGrant.jointGrant(user, expirationDate, partOfJointGrant, { from: tradePartner, value: secondStakedValue });
+    await this.jointGrant.attempt(user, expirationDate, { from: tradePartner, value: secondStakedValue });
 
-    // todo
+    // todo. reveal process.
 
   });
 
   it("should allow contract owner to retrieve lost stakes", async function () {
     const expirationDate = latestTime() + duration.weeks(1);
-    const partOfJointGrant = true;
 
     // user creates a grant
     const stakedValue = ether(1);
-    await this.jointGrant.jointGrant(tradePartner, expirationDate, partOfJointGrant, { from: user, value: stakedValue });
+    await this.jointGrant.attempt(tradePartner, expirationDate, { from: user, value: stakedValue });
 
     // tradePartner creates a grant
     const secondStakedValue = ether(2);
-    await this.jointGrant.jointGrant(user, expirationDate, partOfJointGrant, { from: tradePartner, value: secondStakedValue });
+    await this.jointGrant.attempt(user, expirationDate, { from: tradePartner, value: secondStakedValue });
 
-    // todo
+    // todo reveal process
 
   });
 
   it("should not allow non-owner to retrieve lost stakes", async function () {
     const expirationDate = latestTime() + duration.weeks(1);
-    const partOfJointGrant = true;
 
     // user creates a grant
     const stakedValue = ether(1);
-    await this.jointGrant.jointGrant(tradePartner, expirationDate, partOfJointGrant, { from: user, value: stakedValue });
+    await this.jointGrant.attempt(tradePartner, expirationDate, { from: user, value: stakedValue });
 
     // tradePartner creates a grant
     const secondStakedValue = ether(2);
-    await this.jointGrant.jointGrant(user, expirationDate, partOfJointGrant, { from: tradePartner, value: secondStakedValue });
+    await this.jointGrant.attempt(user, expirationDate, { from: tradePartner, value: secondStakedValue });
 
-    // todo
+    // todo reveal process
 
   });
 

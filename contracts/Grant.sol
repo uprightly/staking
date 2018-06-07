@@ -4,8 +4,8 @@ import "../node_modules/zeppelin-solidity/contracts/ownership/Claimable.sol";
 
 /**
  */
-contract StakeWallet is Claimable {
-    event GrantCreated(address indexed user, address indexed partner, uint256 stakedValue, uint256 expirationDate, bool partOfJointGrant);
+contract Grant is Claimable {
+    event GrantCreated(address indexed user, address indexed partner, uint256 stakedValue, uint256 expirationDate);
     event ReviewCreated(address indexed user, address indexed reviewer, bool negativeExperience, string comment);
     event GrantClosed(address indexed user, address indexed partner);
     event StakeReclaimed(address indexed user, address indexed partner);
@@ -21,14 +21,13 @@ contract StakeWallet is Claimable {
         address partner;
         uint256 stakedValue;
         uint256 expirationDate;
-        bool partOfJointGrant;
     }
 
     mapping (address => mapping (address => Grant)) grants;
 
     uint256 public lostStakes;
 
-    function grant(address partner, uint256 expirationDate, bool partOfJointGrant) payable public returns (bool) {
+    function create(address partner, uint256 expirationDate) payable public returns (bool) {
         require(partner != msg.sender);
         require(expirationDate > now);
 
@@ -45,11 +44,10 @@ contract StakeWallet is Claimable {
             user: msg.sender,
             partner: partner,
             stakedValue: msg.value,
-            expirationDate: expirationDate,
-            partOfJointGrant: partOfJointGrant
+            expirationDate: expirationDate
         });
 
-        emit GrantCreated(msg.sender, partner, msg.value, expirationDate, partOfJointGrant);
+        emit GrantCreated(msg.sender, partner, msg.value, expirationDate);
         return true;
     }
 
