@@ -211,7 +211,7 @@ contract('Grant', function ([owner, user, tradePartner, randomUser]) {
 
     // owner (uprightly team) can claim the stake
     const ownerBalanceBefore = web3.eth.getBalance(owner);
-    const response = await this.grant.claimLostStakes({ from: owner });
+    const response = await this.grant.withdrawLostStakes({ from: owner });
     const claimLostStakesCost = await getCost(response);
     const ownerBalanceAfter = web3.eth.getBalance(owner);
     ownerBalanceAfter.should.be.bignumber.equal(ownerBalanceBefore.add(amountForClaiming).sub(claimLostStakesCost));
@@ -234,7 +234,7 @@ contract('Grant', function ([owner, user, tradePartner, randomUser]) {
     amountForClaiming.should.be.bignumber.equal(stakedValue);
 
     // random person cannot claim the stake
-    expectThrow(this.grant.claimLostStakes({ from: randomUser }));
+    expectThrow(this.grant.withdrawLostStakes({ from: randomUser }));
 
   });
 

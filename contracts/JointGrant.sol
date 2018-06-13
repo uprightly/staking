@@ -14,11 +14,7 @@ contract JointGrant is Claimable {
         return true;
     }
 
-    function submitReview(address partner, bytes32 negativeExperienceHash, bytes32 commentsHash) public returns (bool) {
-        return true;
-    }
-
-    function revealReview(address partner, bool negativeExperience, string comments) public returns (bool) {
+    function review(address partner, bytes32 negativeExperienceHash, bytes32 commentsHash) public returns (bool) {
         return true;
     }
 
@@ -26,7 +22,7 @@ contract JointGrant is Claimable {
         return true;
     }
 
-    function claimLostStakes() public onlyOwner returns (bool) {
+    function withdrawLostStakes() public onlyOwner returns (bool) {
         return true;
     }
 

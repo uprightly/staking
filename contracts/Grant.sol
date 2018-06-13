@@ -96,7 +96,7 @@ contract Grant is Claimable {
         return true;
     }
 
-    function claimLostStakes() public onlyOwner returns (bool) {
+    function withdrawLostStakes() public onlyOwner returns (bool) {
         uint256 stakesToSend = lostStakes;
         lostStakes = 0;
         emit LostStakesClaimed(stakesToSend);

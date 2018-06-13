@@ -66,8 +66,6 @@ contract('JointGrant', function ([owner, user, tradePartner, randomUser]) {
   });
 
   it("should not allow a user to attempt a grant with the same tradePartner without canceling first", async function () {
-    const userBalanceBefore = web3.eth.getBalance(user);
-    const tradePartnerBalanceBefore = web3.eth.getBalance(tradePartner);
 
     const expirationDate = latestTime() + duration.weeks(1);
 
@@ -78,8 +76,6 @@ contract('JointGrant', function ([owner, user, tradePartner, randomUser]) {
   });
 
   it("should not allow either user to attempt a grant with the same tradePartner while there is an active grant", async function () {
-    const userBalanceBefore = web3.eth.getBalance(user);
-    const tradePartnerBalanceBefore = web3.eth.getBalance(tradePartner);
 
     const expirationDate = latestTime() + duration.weeks(1);
 
@@ -185,6 +181,8 @@ contract('JointGrant', function ([owner, user, tradePartner, randomUser]) {
     assert.equal(reviewCreatedEvent.event, "reviewCreated");
     assert.equal(reviewCreatedEvent.args.reviewer, user);
     assert.equal(reviewCreatedEvent.args.reviewee, tradePartner);
+    assert.equal(reviewCreatedEvent.args.negativeExperience, negativeExperience);
+    assert.equal(reviewCreatedEvent.args.comments, comments);
 
     // tradePartner tries to review
     const negativeExperience2 = true;
@@ -196,6 +194,8 @@ contract('JointGrant', function ([owner, user, tradePartner, randomUser]) {
     assert.equal(reviewCreatedEvent2.event, "reviewCreated");
     assert.equal(reviewCreatedEvent2.args.reviewer, tradePartner);
     assert.equal(reviewCreatedEvent2.args.reviewee, user);
+    assert.equal(reviewCreatedEvent2.args.negativeExperience, negativeExperience2);
+    assert.equal(reviewCreatedEvent2.args.comments, comments2);
 
   });
 
@@ -213,33 +213,68 @@ contract('JointGrant', function ([owner, user, tradePartner, randomUser]) {
 
   });
 
-  it("should reveal reviews after both are submitted", async function () {
-    const expirationDate = latestTime() + duration.weeks(1);
-
-    // user creates a grant
-    const stakedValue = ether(1);
-    await this.jointGrant.attempt(tradePartner, expirationDate, { from: user, value: stakedValue });
-
-    // tradePartner creates a grant
-    const secondStakedValue = ether(2);
-    await this.jointGrant.attempt(user, expirationDate, { from: tradePartner, value: secondStakedValue });
-
-    // todo. should there be a reveal process or can it be done with hashing somehow?
-
-  });
 
   it("should allow users to reclaim stakes as long as one review is positive", async function () {
+    const userBalanceBefore = web3.eth.getBalance(user);
+    const partnerBalanceBefore = web3.eth.getBalance(tradePartner);
+
     const expirationDate = latestTime() + duration.weeks(1);
 
     // user creates a grant
     const stakedValue = ether(1);
-    await this.jointGrant.attempt(tradePartner, expirationDate, { from: user, value: stakedValue });
+    const userAttemptResponse = await this.jointGrant.attempt(tradePartner, expirationDate, { from: user, value: stakedValue });
+    const userAttemptCost = getCost(userAttemptResponse);
 
     // tradePartner creates a grant
     const secondStakedValue = ether(2);
-    await this.jointGrant.attempt(user, expirationDate, { from: tradePartner, value: secondStakedValue });
+    const partnerAttemptResponse = await this.jointGrant.attempt(user, expirationDate, { from: tradePartner, value: secondStakedValue });
+    const partnerAttemptCost = getCost(partnerAttemptResponse);
 
-    // todo. need to figure out reveal process first.
+    // user reviews positively
+    const negativeExperience = false;
+    const comments = "had a great time.";
+    const userReviewResponse = await this.jointGrant.review(tradePartner, negativeExperience, comments, { from: user });
+    const userReviewCost = getCost(userReviewResponse);
+
+    // tradePartner reviews negatively
+    const negativeExperience2 = true;
+    const comments2 = "had a bad time.";
+    const partnerReviewResponse = await this.jointGrant.review(user, negativeExperience2, comments2, { from: tradePartner });
+    const partnerReviewCost = getCost(partnerReviewResponse);
+
+    // user try to reclaim stakes
+    const userReclaimResponse = await this.jointGrant.reclaimStake(tradePartner, { from: user });
+    const userReclaimCost = getCost(userReclaimResponse);
+
+    const ReclaimedEvent = userReclaimResponse.logs[0];
+
+    assert.equal(ReclaimedEvent.event, "StakeReclaimed");
+    assert.equal(ReclaimedEvent.args.user, user);
+    assert.equal(ReclaimedEvent.args.partner, tradePartner);
+    assert.equal(ReclaimedEvent.args.amount, stakedValue);
+
+    // balance should be the same as before minus transaction costs because the stake is reclaimed.
+    const expectedUserBalanceAfter = userBalanceBefore.sub(userAttemptCost).sub(userReviewCost).sub(userReclaimCost);
+    const userBalanceAfter = web3.eth.getBalance(user);
+
+    assert.equal(expectedUserBalanceAfter, userBalanceAfter);
+
+    // tradepartner try to reclaim stakes
+    const partnerReclaimResponse = await this.jointGrant.reclaimStake(user, { from: tradePartner });
+    const partnerReclaimCost = getCost(partnerReclaimResponse);
+
+    const ReclaimedEvent2 = partnerReclaimResponse.logs[0];
+
+    assert.equal(ReclaimedEvent2.event, "StakeReclaimed");
+    assert.equal(ReclaimedEvent2.args.user, tradePartner);
+    assert.equal(ReclaimedEvent2.args.partner, user);
+    assert.equal(ReclaimedEvent2.args.amount, secondStakedValue);
+
+    // balance should be the same as before minus transaction costs because the stake is reclaimed.
+    const expectedPartnerBalanceAfter = partnerBalanceBefore.sub(partnerAttemptCost).sub(partnerReviewCost).sub(partnerReclaimCost);
+    const partnerBalanceAfter = web3.eth.getBalance(tradePartner);
+
+    assert.equal(expectedPartnerBalanceAfter, partnerBalanceAfter);
 
   });
 
@@ -271,6 +306,7 @@ contract('JointGrant', function ([owner, user, tradePartner, randomUser]) {
     assert.equal(userStakeReclaimed.event, "StakeReclaimed");
     assert.equal(userStakeReclaimed.args.user, user);
     assert.equal(userStakeReclaimed.args.partner, tradePartner);
+    assert.equal(userStakeReclaimed.args.amount, stakedValue);
 
     const userBalanceAfter = web3.eth.getBalance(user);
     const expectedUserBalanceAfter = userBalanceBefore.sub(userGrantCost).sub(userReclaimStakeCost);
@@ -285,6 +321,7 @@ contract('JointGrant', function ([owner, user, tradePartner, randomUser]) {
     assert.equal(partnerStakeReclaimed.event, "StakeReclaimed");
     assert.equal(partnerStakeReclaimed.args.user, tradePartner);
     assert.equal(partnerStakeReclaimed.args.partner, user);
+    assert.equal(partnerStakeReclaimed.args.amount, secondStakedValue);
 
     const partnerBalanceAfter = web3.eth.getBalance(user);
     const expectedPartnerBalanceAfter = partnerBalanceBefore.sub(partnerGrantCost).sub(partnerReclaimStakeCost);
@@ -303,8 +340,8 @@ contract('JointGrant', function ([owner, user, tradePartner, randomUser]) {
     const secondStakedValue = ether(2);
     await this.jointGrant.attempt(user, expirationDate, { from: tradePartner, value: secondStakedValue });
 
-    expectThrow(await this.jointGrant.reclaimStake(tradePartner, { from: user }));
-    expectThrow(await this.jointGrant.reclaimStake(user, { from: tradePartner }));
+    expectThrow(this.jointGrant.reclaimStake(tradePartner, { from: user }));
+    expectThrow(this.jointGrant.reclaimStake(user, { from: tradePartner }));
 
   });
 
@@ -319,8 +356,14 @@ contract('JointGrant', function ([owner, user, tradePartner, randomUser]) {
     const secondStakedValue = ether(2);
     await this.jointGrant.attempt(user, expirationDate, { from: tradePartner, value: secondStakedValue });
 
-    // todo. need to figure out reveal process.
+    // add a single review
+    const negativeExperience = false;
+    const comments = "it was fine.";
+    await this.jointGrant.review(tradePartner, negativeExperience, comments, { from: user });
 
+    // should not allow to reclaim stakes
+    expectThrow(this.jointGrant.reclaimStake(tradePartner, { from: user }));
+    expectThrow(this.jointGrant.reclaimStake(user, { from: tradePartner }));
   });
 
   it("should not allow reclaiming of stakes if both reviews are negative", async function () {
@@ -334,11 +377,23 @@ contract('JointGrant', function ([owner, user, tradePartner, randomUser]) {
     const secondStakedValue = ether(2);
     await this.jointGrant.attempt(user, expirationDate, { from: tradePartner, value: secondStakedValue });
 
-    // todo. reveal process.
+    // user reviews negatively
+    const negativeExperience = true;
+    const comments = "it was bad.";
+    await this.jointGrant.review(tradePartner, negativeExperience, comments, { from: user });
 
+    // partner reviews negatively
+    const negativeExperience2 = true;
+    const comments2 = "it was really bad.";
+    await this.jointGrant.review(user, negativeExperience2, comments2, { from: tradePartner });
+
+    // should not be able to reclaim
+    expectThrow(this.jointGrant.reclaimStake(tradePartner, { from: user }));
+    expectThrow(this.jointGrant.reclaimStake(user, { from: tradePartner }));
   });
 
   it("should allow contract owner to retrieve lost stakes", async function () {
+    const ownerBalanceBefore = web3.eth.getBalance(owner);
     const expirationDate = latestTime() + duration.weeks(1);
 
     // user creates a grant
@@ -349,8 +404,30 @@ contract('JointGrant', function ([owner, user, tradePartner, randomUser]) {
     const secondStakedValue = ether(2);
     await this.jointGrant.attempt(user, expirationDate, { from: tradePartner, value: secondStakedValue });
 
-    // todo reveal process
+    // user reviews negatively
+    const negativeExperience = true;
+    const comments = "it was bad.";
+    await this.jointGrant.review(tradePartner, negativeExperience, comments, { from: user });
 
+    // partner reviews negatively
+    const negativeExperience2 = true;
+    const comments2 = "it was really bad.";
+    await this.jointGrant.review(user, negativeExperience2, comments2, { from: tradePartner });
+
+    // retrieve lost stakes
+    const withdrawResponse = await this.jointGrant.withdrawLostStakes({ from: owner });
+    const withdrawCost = getCost(withdrawResponse);
+    const lostStakesAmount = stakedValue.add(secondStakedValue);
+
+    const withdrawEvent = withdrawResponse.logs[0];
+    assert.equal(withdrawEvent.event, "LostStakesWithdrawn");
+    assert.equal(withdrawEvent.args.owner, owner);
+    assert.equal(withdrawEvent.args.amount, lostStakesAmount);
+
+    const ownerBalanceAfter = web3.eth.getBalance(owner);
+    const expectedOwnerBalanceAfter = ownerBalanceBefore.add(lostStakesAmount).sub(withdrawCost);
+
+    assert.equal(expectedOwnerBalanceAfter, ownerBalanceAfter);
   });
 
   it("should not allow non-owner to retrieve lost stakes", async function () {
@@ -364,7 +441,17 @@ contract('JointGrant', function ([owner, user, tradePartner, randomUser]) {
     const secondStakedValue = ether(2);
     await this.jointGrant.attempt(user, expirationDate, { from: tradePartner, value: secondStakedValue });
 
-    // todo reveal process
+    // user reviews negatively
+    const negativeExperience = true;
+    const comments = "it was bad.";
+    await this.jointGrant.review(tradePartner, negativeExperience, comments, { from: user });
+
+    // partner reviews negatively
+    const negativeExperience2 = true;
+    const comments2 = "it was really bad.";
+    await this.jointGrant.review(user, negativeExperience2, comments2, { from: tradePartner });
+
+    expectThrow(this.jointGrant.withdrawLostStakes({ from: randomUser }));
 
   });
 
