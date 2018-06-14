@@ -13,6 +13,6 @@
   "dependencies": {
     "truffle": "^4.0.0",
     "truffle-hdwallet-provider": "0.0.3",
-    "zeppelin-solidity": "^1.7.0"
+    "zeppelin-solidity": "^1.10.0"
   }
 }

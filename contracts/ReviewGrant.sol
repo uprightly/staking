@@ -4,7 +4,7 @@ import "../node_modules/zeppelin-solidity/contracts/ownership/Claimable.sol";
 
 /**
  */
-contract Grant is Claimable {
+contract ReviewGrant is Claimable {
     event GrantCreated(address indexed user, address indexed partner, uint256 stakedValue, uint256 expirationDate);
     event ReviewCreated(address indexed user, address indexed reviewer, bool negativeExperience, string comment);
     event GrantClosed(address indexed user, address indexed partner);

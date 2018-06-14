@@ -1,4 +1,4 @@
-const JointGrant = artifacts.require("JointGrant");
+const JointReviewGrant = artifacts.require("JointReviewGrant");
 
 import ether from 'zeppelin-solidity/test/helpers/ether';
 import { advanceBlock } from 'zeppelin-solidity/test/helpers/advanceToBlock';
@@ -21,10 +21,10 @@ async function getCost(response) {
 /**
  * Unit tests for a joint grant
  */
-contract('JointGrant', function ([owner, user, tradePartner, randomUser]) {
+contract('JointReviewGrant', function ([owner, user, tradePartner, randomUser]) {
 
   beforeEach(async function () {
-    this.jointGrant = await JointGrant.new();
+    this.jointGrant = await JointReviewGrant.new();
     await advanceBlock();
   });
 

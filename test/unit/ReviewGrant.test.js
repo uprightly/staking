@@ -1,4 +1,4 @@
-const Grant = artifacts.require("Grant");
+const ReviewGrant = artifacts.require("ReviewGrant");
 
 import ether from 'zeppelin-solidity/test/helpers/ether';
 import { advanceBlock } from 'zeppelin-solidity/test/helpers/advanceToBlock';
@@ -21,10 +21,10 @@ async function getCost(response) {
 /**
  * Unit tests for the stake wallet
  */
-contract('Grant', function ([owner, user, tradePartner, randomUser]) {
+contract('ReviewGrant', function ([owner, user, tradePartner, randomUser]) {
 
   beforeEach(async function () {
-    this.grant = await Grant.new();
+    this.grant = await ReviewGrant.new();
     await advanceBlock();
   });
 

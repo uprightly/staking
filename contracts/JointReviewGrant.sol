@@ -4,7 +4,7 @@ import "../node_modules/zeppelin-solidity/contracts/ownership/Claimable.sol";
 
 /**
  */
-contract JointGrant is Claimable {
+contract JointReviewGrant is Claimable {
 
     function attempt(address partner, uint256 expirationDate) payable public returns (bool) {
         return true;
