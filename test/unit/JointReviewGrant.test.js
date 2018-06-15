@@ -37,10 +37,10 @@ contract('JointReviewGrant', function ([owner, user, tradePartner, randomUser]) 
     // user creates a grant
     const stakedValue = ether(1);
     const response = await this.jointGrant.attempt(tradePartner, expirationDate, { from: user, value: stakedValue });
-    const userCost = getCost(response);
+    const userCost = await getCost(response);
     const grantEvent = response.logs[0];
 
-    assert.equal(grantEvent.event, "jointGrantAttempted");
+    assert.equal(grantEvent.event, "JointGrantAttempted");
     assert.equal(grantEvent.args.user, user);
     assert.equal(grantEvent.args.partner, tradePartner);
     assert.equal(grantEvent.args.expirationDate, expirationDate);
@@ -49,14 +49,20 @@ contract('JointReviewGrant', function ([owner, user, tradePartner, randomUser]) 
     // tradePartner creates a grant
     const secondStakedValue = ether(2);
     const secondResponse = await this.jointGrant.attempt(user, expirationDate, { from: tradePartner, value: secondStakedValue });
-    const tradePartnerCost = getCost(secondResponse);
-    const secondGrantEvent = secondResponse.logs[0];
+    const tradePartnerCost = await getCost(secondResponse);
+    const secondGrantAttemptEvent = secondResponse.logs[0];
+    const secondGrantCreatedEvent = secondResponse.logs[1];
 
-    assert.equal(secondGrantEvent.event, "jointGrantCreated");
-    assert.equal(secondGrantEvent.args.user, tradePartner);
-    assert.equal(secondGrantEvent.args.partner, user);
-    assert.equal(secondGrantEvent.args.expirationDate, expirationDate);
-    secondGrantEvent.args.stakedValue.should.be.bignumber.equal(secondStakedValue);
+    assert.equal(secondGrantAttemptEvent.event, "JointGrantAttempted");
+    assert.equal(secondGrantAttemptEvent.args.user, tradePartner);
+    assert.equal(secondGrantAttemptEvent.args.partner, user);
+    assert.equal(secondGrantAttemptEvent.args.expirationDate, expirationDate);
+    secondGrantAttemptEvent.args.stakedValue.should.be.bignumber.equal(secondStakedValue);
+
+    assert.equal(secondGrantCreatedEvent.event, "JointGrantCreated");
+    assert.equal(secondGrantCreatedEvent.args.user, tradePartner);
+    assert.equal(secondGrantCreatedEvent.args.partner, user);
+    assert.equal(secondGrantCreatedEvent.args.expirationDate, expirationDate);
 
     const userBalanceAfter = web3.eth.getBalance(user);
     const tradePartnerBalanceAfter = web3.eth.getBalance(tradePartner);
@@ -82,7 +88,7 @@ contract('JointReviewGrant', function ([owner, user, tradePartner, randomUser]) 
     // user creates a grant
     const stakedValue = ether(1);
     const response = await this.jointGrant.attempt(tradePartner, expirationDate, { from: user, value: stakedValue });
-    const userCost = getCost(response);
+    const userCost = await getCost(response);
     const grantEvent = response.logs[0];
 
     assert.equal(grantEvent.event, "jointGrantAttempted");
@@ -90,7 +96,7 @@ contract('JointReviewGrant', function ([owner, user, tradePartner, randomUser]) 
     // tradePartner creates a grant
     const secondStakedValue = ether(2);
     const secondResponse = await this.jointGrant.attempt(user, expirationDate, { from: tradePartner, value: secondStakedValue });
-    const tradePartnerCost = getCost(secondResponse);
+    const tradePartnerCost = await getCost(secondResponse);
     const secondGrantEvent = secondResponse.logs[0];
 
     assert.equal(secondGrantEvent.event, "jointGrantCreated");
@@ -123,13 +129,13 @@ contract('JointReviewGrant', function ([owner, user, tradePartner, randomUser]) 
     // user creates a grant
     const stakedValue = ether(1);
     const response = await this.jointGrant.attempt(tradePartner, expirationDate, { from: user, value: stakedValue });
-    responseCost = getCost(response);
+    responseCost = await getCost(response);
     const grantEvent = response.logs[0];
 
     assert.equal(grantEvent.event, "jointGrantAttempted");
 
     const cancelResponse = await this.jointGrant.cancel(tradePartner, { from: user });
-    const cancelCost = getCost(cancelResponse);
+    const cancelCost = await getCost(cancelResponse);
     const cancelEvent = response.logs[0];
 
     assert.equal(cancelEvent.event, "jointGrantCanceled");
@@ -223,28 +229,28 @@ contract('JointReviewGrant', function ([owner, user, tradePartner, randomUser]) 
     // user creates a grant
     const stakedValue = ether(1);
     const userAttemptResponse = await this.jointGrant.attempt(tradePartner, expirationDate, { from: user, value: stakedValue });
-    const userAttemptCost = getCost(userAttemptResponse);
+    const userAttemptCost = await getCost(userAttemptResponse);
 
     // tradePartner creates a grant
     const secondStakedValue = ether(2);
     const partnerAttemptResponse = await this.jointGrant.attempt(user, expirationDate, { from: tradePartner, value: secondStakedValue });
-    const partnerAttemptCost = getCost(partnerAttemptResponse);
+    const partnerAttemptCost = await getCost(partnerAttemptResponse);
 
     // user reviews positively
     const negativeExperience = false;
     const comments = "had a great time.";
     const userReviewResponse = await this.jointGrant.review(tradePartner, negativeExperience, comments, { from: user });
-    const userReviewCost = getCost(userReviewResponse);
+    const userReviewCost = await getCost(userReviewResponse);
 
     // tradePartner reviews negatively
     const negativeExperience2 = true;
     const comments2 = "had a bad time.";
     const partnerReviewResponse = await this.jointGrant.review(user, negativeExperience2, comments2, { from: tradePartner });
-    const partnerReviewCost = getCost(partnerReviewResponse);
+    const partnerReviewCost = await getCost(partnerReviewResponse);
 
     // user try to reclaim stakes
     const userReclaimResponse = await this.jointGrant.reclaimStake(tradePartner, { from: user });
-    const userReclaimCost = getCost(userReclaimResponse);
+    const userReclaimCost = await getCost(userReclaimResponse);
 
     const ReclaimedEvent = userReclaimResponse.logs[0];
 
@@ -261,7 +267,7 @@ contract('JointReviewGrant', function ([owner, user, tradePartner, randomUser]) 
 
     // tradepartner try to reclaim stakes
     const partnerReclaimResponse = await this.jointGrant.reclaimStake(user, { from: tradePartner });
-    const partnerReclaimCost = getCost(partnerReclaimResponse);
+    const partnerReclaimCost = await getCost(partnerReclaimResponse);
 
     const ReclaimedEvent2 = partnerReclaimResponse.logs[0];
 
@@ -416,7 +422,7 @@ contract('JointReviewGrant', function ([owner, user, tradePartner, randomUser]) 
 
     // retrieve lost stakes
     const withdrawResponse = await this.jointGrant.withdrawLostStakes({ from: owner });
-    const withdrawCost = getCost(withdrawResponse);
+    const withdrawCost = await getCost(withdrawResponse);
     const lostStakesAmount = stakedValue.add(secondStakedValue);
 
     const withdrawEvent = withdrawResponse.logs[0];

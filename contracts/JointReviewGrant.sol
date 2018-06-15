@@ -5,8 +5,58 @@ import "../node_modules/zeppelin-solidity/contracts/ownership/Claimable.sol";
 /**
  */
 contract JointReviewGrant is Claimable {
+    event JointGrantAttempted(address user, address partner, uint256 stakedValue, uint256 expirationDate);
+    event JointGrantCreated(address user, address partner, uint256 expirationDate);
+
+    struct Grant {
+        bool exists;
+        bool reviewed;
+        bool negativeExperience;
+        bool stakeReclaimed;
+        address user;
+        address partner;
+        uint256 stakedValue;
+        uint256 expirationDate;
+        bool partnerGrantExists;
+    }
+
+    mapping (address => mapping (address => Grant)) grants;
+
+    uint256 public lostStakes;
 
     function attempt(address partner, uint256 expirationDate) payable public returns (bool) {
+        require(partner != msg.sender);
+        require(expirationDate > now);
+
+        // This implies that there can only be one grant for a user-partner transaction.
+        // TODO: make multiple grants not overwrite existing grants. This is a big issue.
+        // for now, just make sure there is not a pre-existing grant.
+        require(grants[partner][msg.sender].exists == false);
+
+        bool partnerGrantExists = false;
+        // check if the partner already attempted to create a grant
+        if (grants[msg.sender][partner].exists == true) {
+            partnerGrantExists = true;
+        }
+
+        grants[partner][msg.sender] = Grant({
+            exists: true,
+            reviewed: false,
+            negativeExperience: false,
+            stakeReclaimed: false,
+            user: msg.sender,
+            partner: partner,
+            stakedValue: msg.value,
+            expirationDate: expirationDate,
+            partnerGrantExists: partnerGrantExists
+        });
+
+        emit JointGrantAttempted(msg.sender, partner, msg.value, expirationDate);
+
+        if (partnerGrantExists == true) {
+            emit JointGrantCreated(msg.sender, partner, expirationDate);
+        }
+
         return true;
     }
 
