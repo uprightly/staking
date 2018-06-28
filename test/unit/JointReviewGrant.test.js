@@ -88,18 +88,18 @@ contract('JointReviewGrant', function ([owner, user, tradePartner, randomUser]) 
     // user creates a grant
     const stakedValue = ether(1);
     const response = await this.jointGrant.attempt(tradePartner, expirationDate, { from: user, value: stakedValue });
-    const userCost = await getCost(response);
     const grantEvent = response.logs[0];
 
-    assert.equal(grantEvent.event, "jointGrantAttempted");
+    assert.equal(grantEvent.event, "JointGrantAttempted");
 
     // tradePartner creates a grant
     const secondStakedValue = ether(2);
     const secondResponse = await this.jointGrant.attempt(user, expirationDate, { from: tradePartner, value: secondStakedValue });
-    const tradePartnerCost = await getCost(secondResponse);
-    const secondGrantEvent = secondResponse.logs[0];
+    const secondGrantAttemptEvent = secondResponse.logs[0];
+    const secondGrantCreatedEvent = secondResponse.logs[1];
 
-    assert.equal(secondGrantEvent.event, "jointGrantCreated");
+    assert.equal(secondGrantAttemptEvent.event, "JointGrantAttempted");
+    assert.equal(secondGrantCreatedEvent.event, "JointGrantCreated");
 
     expectThrow(this.jointGrant.attempt(tradePartner, expirationDate, { from: user, value: stakedValue }));
     expectThrow(this.jointGrant.attempt(user, expirationDate, { from: tradePartner, value: secondStakedValue }));
@@ -113,7 +113,7 @@ contract('JointReviewGrant', function ([owner, user, tradePartner, randomUser]) 
     const response = await this.jointGrant.attempt(tradePartner, expirationDate, { from: user, value: stakedValue });
     const grantEvent = response.logs[0];
 
-    assert.equal(grantEvent.event, "jointGrantAttempted");
+    assert.equal(grantEvent.event, "JointGrantAttempted");
 
     // tradePartner creates a grant
     const wrongExpirationDate = latestTime() + duration.weeks(2);
@@ -129,16 +129,16 @@ contract('JointReviewGrant', function ([owner, user, tradePartner, randomUser]) 
     // user creates a grant
     const stakedValue = ether(1);
     const response = await this.jointGrant.attempt(tradePartner, expirationDate, { from: user, value: stakedValue });
-    responseCost = await getCost(response);
+    const responseCost = await getCost(response);
     const grantEvent = response.logs[0];
 
-    assert.equal(grantEvent.event, "jointGrantAttempted");
+    assert.equal(grantEvent.event, "JointGrantAttempted");
 
     const cancelResponse = await this.jointGrant.cancel(tradePartner, { from: user });
     const cancelCost = await getCost(cancelResponse);
-    const cancelEvent = response.logs[0];
+    const cancelEvent = cancelResponse.logs[0];
 
-    assert.equal(cancelEvent.event, "jointGrantCanceled");
+    assert.equal(cancelEvent.event, "JointGrantCanceled");
     assert.equal(cancelEvent.args.user, user);
     assert.equal(cancelEvent.args.partner, tradePartner);
 
@@ -148,12 +148,31 @@ contract('JointReviewGrant', function ([owner, user, tradePartner, randomUser]) 
 
   });
 
+  it("should not allow either user to cancel the grant if the grant is active", async function () {
+
+    const expirationDate = latestTime() + duration.weeks(1);
+
+    // user creates a grant
+    const stakedValue = ether(1);
+    await this.jointGrant.attempt(tradePartner, expirationDate, { from: user, value: stakedValue });
+
+    // tradePartner creates a grant
+    const secondStakedValue = ether(2);
+    const secondResponse = await this.jointGrant.attempt(user, expirationDate, { from: tradePartner, value: secondStakedValue });
+    const secondGrantCreatedEvent = secondResponse.logs[1];
+
+    assert.equal(secondGrantCreatedEvent.event, "JointGrantCreated");
+
+    expectThrow(this.jointGrant.cancel(tradePartner, { from: user }));
+    expectThrow(this.jointGrant.cancel(user, { from: tradePartner }));
+  });
+
   it("should fail to create a joint grant if a user attempts and then cancels before the other party attempts", async function () {
     const expirationDate = latestTime() + duration.weeks(1);
 
     // user creates a grant
     const stakedValue = ether(1);
-    await this.jointGrant.grant(tradePartner, expirationDate, { from: user, value: stakedValue });
+    await this.jointGrant.attempt(tradePartner, expirationDate, { from: user, value: stakedValue });
     await this.jointGrant.cancel(tradePartner, { from: user });
 
     // tradePartner creates a grant
@@ -163,7 +182,7 @@ contract('JointReviewGrant', function ([owner, user, tradePartner, randomUser]) 
     const grantEvent = response.logs[0];
 
     // this indicates that the canceled grant attempt is no longer valid, otherwise this would have created a joint grant.
-    assert.equal(grantEvent.event, "jointGrantAttempted");
+    assert.equal(grantEvent.event, "JointGrantAttempted");
   });
 
   it("should allow users to leave reviews for each other in a joint grant", async function () {

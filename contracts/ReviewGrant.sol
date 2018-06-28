@@ -16,7 +16,6 @@ contract ReviewGrant is Claimable {
         bool exists;
         bool reviewed;
         bool negativeExperience;
-        bool stakeReclaimed;
         address user;
         address partner;
         uint256 stakedValue;
@@ -40,7 +39,6 @@ contract ReviewGrant is Claimable {
             exists: true,
             reviewed: false,
             negativeExperience: false,
-            stakeReclaimed: false,
             user: msg.sender,
             partner: partner,
             stakedValue: msg.value,
@@ -63,7 +61,8 @@ contract ReviewGrant is Claimable {
         if (negativeExperience) {
             // the stake has been claimed by the contract and added to lostStakes
             lostStakes += grants[msg.sender][partner].stakedValue;
-            grants[partner][msg.sender].stakeReclaimed = true;
+            // clear the grant out
+            grants[partner][msg.sender].exists = false;
             emit StakeLost(partner, grants[msg.sender][partner].stakedValue);
         }
 
@@ -84,11 +83,9 @@ contract ReviewGrant is Claimable {
     function reclaimStake(address partner) public returns (bool) {
         require(grants[partner][msg.sender].exists == true);
         require(reviewedPositively(partner, msg.sender) || grantExpired(partner, msg.sender));
-        require(grants[partner][msg.sender].stakeReclaimed == false);
 
-        // This ends the grant, clear it out. Unsure at this point if we still need the grant for the dual-grant feature
-        // so just use a boolean to flag this as reclaimed already.
-        grants[partner][msg.sender].stakeReclaimed = true;
+        // This ends the grant, clear it out.
+        grants[partner][msg.sender].exists = false;
         emit StakeReclaimed(msg.sender, partner);
 
         msg.sender.transfer(grants[partner][msg.sender].stakedValue);

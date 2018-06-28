@@ -7,6 +7,7 @@ import "../node_modules/zeppelin-solidity/contracts/ownership/Claimable.sol";
 contract JointReviewGrant is Claimable {
     event JointGrantAttempted(address user, address partner, uint256 stakedValue, uint256 expirationDate);
     event JointGrantCreated(address user, address partner, uint256 expirationDate);
+    event JointGrantCanceled(address user, address partner);
 
     struct Grant {
         bool exists;
@@ -37,6 +38,9 @@ contract JointReviewGrant is Claimable {
         // check if the partner already attempted to create a grant
         if (grants[msg.sender][partner].exists == true) {
             partnerGrantExists = true;
+
+            // expiration date must be the same as the one that the partner submitted
+            require(expirationDate == grants[msg.sender][partner].expirationDate);
         }
 
         grants[partner][msg.sender] = Grant({
@@ -61,6 +65,15 @@ contract JointReviewGrant is Claimable {
     }
 
     function cancel(address partner) public returns (bool) {
+        require(partner != msg.sender);
+        require(grants[partner][msg.sender].exists == true);
+        require(grants[msg.sender][partner].exists == false);
+
+        grants[partner][msg.sender].exists = false;
+        emit JointGrantCanceled(msg.sender, partner);
+
+        msg.sender.transfer(grants[partner][msg.sender].stakedValue);
+
         return true;
     }
 

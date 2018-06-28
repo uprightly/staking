@@ -238,4 +238,33 @@ contract('ReviewGrant', function ([owner, user, tradePartner, randomUser]) {
 
   });
 
+  it("should allow the user to create another grant for the same partner after successful retrieval of the stake after an initial positive review", async function () {
+    // user creates a grant
+    const expirationDate = latestTime() + duration.weeks(1);
+    const stakedValue = ether(1);
+    const grantResponse = await this.grant.create(tradePartner, expirationDate, { from: user, value: stakedValue });
+    const grantCost = await getCost(grantResponse);
+
+    // tradePartner positively reviews.
+    const negativeExperience = false;
+    const comment = "very positive review!";
+    await this.grant.review(user, negativeExperience, comment, { from: tradePartner });
+
+    const reclaimStakeResponse = await this.grant.reclaimStake(tradePartner, { from: user });
+
+    // check that the staked value was returned.
+    const stakeReclaimed = reclaimStakeResponse.logs[0];
+    assert.equal(stakeReclaimed.event, "StakeReclaimed");
+
+    // should be able to create another grant at this point
+    const secondExpirationDate = latestTime() + duration.weeks(3);
+    const secondStakedValue = ether(3);
+
+    const response = await this.grant.create(tradePartner, secondExpirationDate, { from: user, value: secondStakedValue });
+
+    const grantEvent = response.logs[0];
+
+    assert.equal(grantEvent.event, "GrantCreated");
+  });
+
 });
