@@ -8,6 +8,7 @@ contract JointReviewGrant is Claimable {
     event JointGrantAttempted(address user, address partner, uint256 stakedValue, uint256 expirationDate);
     event JointGrantCreated(address user, address partner, uint256 expirationDate);
     event JointGrantCanceled(address user, address partner);
+    event ReviewCreated(address reviewee, address reviewer, bool negativeExperience, string comments);
 
     struct Grant {
         bool exists;
@@ -41,6 +42,9 @@ contract JointReviewGrant is Claimable {
 
             // expiration date must be the same as the one that the partner submitted
             require(expirationDate == grants[msg.sender][partner].expirationDate);
+
+            // update the partner's grant with partnerGrantExists, too, because that is false at this point.
+            grants[msg.sender][partner].partnerGrantExists = true;
         }
 
         grants[partner][msg.sender] = Grant({
@@ -77,7 +81,28 @@ contract JointReviewGrant is Claimable {
         return true;
     }
 
-    function review(address partner, bytes32 negativeExperienceHash, bytes32 commentsHash) public returns (bool) {
+    function review(address partner, bool negativeExperience, string comments) public returns (bool) {
+        require(partner != msg.sender);
+
+        // We want to get the grant of the partner for this user
+        // (`grants[msg.sender][partner]` instead of `grants[partner][msg.sender]`),
+        // so this user can review the other person's grant.
+        // We don't want the user to review themselves.
+        Grant storage grantToReview = grants[msg.sender][partner];
+
+        require(grantToReview.exists == true);
+
+        require(grantToReview.partnerGrantExists == true);
+        require(grantToReview.expirationDate > now);
+        require(grantToReview.reviewed == false);
+
+        grantToReview.reviewed = true;
+        grantToReview.negativeExperience = negativeExperience;
+
+        emit ReviewCreated(partner, msg.sender, negativeExperience, comments);
+
+        // check that the other review has been left. if so, make the stakes be lost.
+
         return true;
     }
 

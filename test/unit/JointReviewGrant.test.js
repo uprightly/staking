@@ -203,7 +203,7 @@ contract('JointReviewGrant', function ([owner, user, tradePartner, randomUser]) 
 
     const reviewCreatedEvent = reviewResponse.logs[0];
 
-    assert.equal(reviewCreatedEvent.event, "reviewCreated");
+    assert.equal(reviewCreatedEvent.event, "ReviewCreated");
     assert.equal(reviewCreatedEvent.args.reviewer, user);
     assert.equal(reviewCreatedEvent.args.reviewee, tradePartner);
     assert.equal(reviewCreatedEvent.args.negativeExperience, negativeExperience);
@@ -216,7 +216,7 @@ contract('JointReviewGrant', function ([owner, user, tradePartner, randomUser]) 
 
     const reviewCreatedEvent2 = reviewResponse2.logs[0];
 
-    assert.equal(reviewCreatedEvent2.event, "reviewCreated");
+    assert.equal(reviewCreatedEvent2.event, "ReviewCreated");
     assert.equal(reviewCreatedEvent2.args.reviewer, tradePartner);
     assert.equal(reviewCreatedEvent2.args.reviewee, user);
     assert.equal(reviewCreatedEvent2.args.negativeExperience, negativeExperience2);
