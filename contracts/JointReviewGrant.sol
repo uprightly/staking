@@ -19,7 +19,6 @@ contract JointReviewGrant is Claimable {
         address partner;
         uint256 stakedValue;
         uint256 expirationDate;
-        bool partnerGrantExists;
     }
 
     mapping (address => mapping (address => Grant)) grants;
@@ -35,16 +34,11 @@ contract JointReviewGrant is Claimable {
         // for now, just make sure there is not a pre-existing grant.
         require(grants[partner][msg.sender].exists == false);
 
-        bool partnerGrantExists = false;
         // check if the partner already attempted to create a grant
-        if (grants[msg.sender][partner].exists == true) {
-            partnerGrantExists = true;
-
+        Grant storage partnerGrant = grants[msg.sender][partner];
+        if (partnerGrant.exists == true) {
             // expiration date must be the same as the one that the partner submitted
             require(expirationDate == grants[msg.sender][partner].expirationDate);
-
-            // update the partner's grant with partnerGrantExists, too, because that is false at this point.
-            grants[msg.sender][partner].partnerGrantExists = true;
         }
 
         grants[partner][msg.sender] = Grant({
@@ -55,13 +49,12 @@ contract JointReviewGrant is Claimable {
             user: msg.sender,
             partner: partner,
             stakedValue: msg.value,
-            expirationDate: expirationDate,
-            partnerGrantExists: partnerGrantExists
+            expirationDate: expirationDate
         });
 
         emit JointGrantAttempted(msg.sender, partner, msg.value, expirationDate);
 
-        if (partnerGrantExists == true) {
+        if (partnerGrant.exists == true) {
             emit JointGrantCreated(msg.sender, partner, expirationDate);
         }
 
@@ -92,7 +85,9 @@ contract JointReviewGrant is Claimable {
 
         require(grantToReview.exists == true);
 
-        require(grantToReview.partnerGrantExists == true);
+        Grant storage partnerGrant = grants[partner][msg.sender];
+        require(partnerGrant.exists == true);
+
         require(grantToReview.expirationDate > now);
         require(grantToReview.reviewed == false);
 

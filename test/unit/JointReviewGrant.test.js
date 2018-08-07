@@ -231,10 +231,13 @@ contract('JointReviewGrant', function ([owner, user, tradePartner, randomUser]) 
     const stakedValue = ether(1);
     await this.jointGrant.attempt(tradePartner, expirationDate, { from: user, value: stakedValue });
 
-    // user tries to review
+    // user tries to review partner
     const negativeExperience = false;
     const comments = "this is a review that was left before the grant was created by both parties.";
     expectThrow(this.jointGrant.review(tradePartner, negativeExperience, comments, { from: user }));
+
+    // partner tries to review user before attempting the grant themselves
+    expectThrow(this.jointGrant.review(user, negativeExperience, comments, { from: tradePartner }));
 
   });
 
