@@ -102,6 +102,7 @@ contract JointReviewGrant is Claimable {
     }
 
     function reclaimStake(address partner) public returns (bool) {
+
         return true;
     }
 

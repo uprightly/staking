@@ -1,5 +1,5 @@
 {
-  "name": "uprightly-genesis-contracts",
+  "name": "uprightly-staking-contracts",
   "devDependencies": {
     "babel-polyfill": "^6.26.0",
     "babel-preset-es2015": "^6.18.0",
